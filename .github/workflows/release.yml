@@ -30,7 +30,7 @@ jobs:
           name: linux-artifacts
           path: |
             dist/linux/*
-        if-no-files-found: error
+          if-no-files-found: error
 
   build-macos:
     runs-on: macos-latest
@@ -56,7 +56,7 @@ jobs:
           path: |
             dist/darwin/*
             dist/macos/*.pkg
-        if-no-files-found: error
+          if-no-files-found: error
 
   publish:
     needs: [build-linux, build-macos]
