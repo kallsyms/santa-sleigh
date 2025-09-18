@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+SERVICE="santa-sleigh.service"
+
+systemctl daemon-reload >/dev/null 2>&1 || true
+
+if [ "$1" = "purge" ]; then
+    rm -f /etc/santa-sleigh/config.toml
+    rm -f /etc/default/santa-sleigh
+    deluser --system santa-sleigh >/dev/null 2>&1 || true
+    delgroup --system santa-sleigh >/dev/null 2>&1 || true
+fi
+
+exit 0

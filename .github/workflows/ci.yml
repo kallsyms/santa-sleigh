@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Go fmt check
+        run: |
+          fmt_files=$(gofmt -l .)
+          if [[ -n "$fmt_files" ]]; then
+            echo "The following files need gofmt:" >&2
+            echo "$fmt_files" >&2
+            exit 1
+          fi
+      - name: Go vet
+        run: go vet ./...
+      - name: Go test
+        run: go test ./...
+      - name: Go build
+        run: go build ./...

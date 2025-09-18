@@ -1,0 +1,27 @@
+# Example configuration for the santa-sleigh daemon.
+
+[aws]
+region = "us-west-2"
+bucket = "my-santa-telemetry"
+# access_key = "AKIA..."          # Optional: falls back to environment/instance metadata if unset.
+# secret_key = "..."               # Optional counterpart for access_key.
+# session_token = "..."            # Optional STS session token.
+# profile = "sso-profile"          # Optional shared config profile name.
+# custom_url = "https://s3.mycompany.local" # Optional for S3-compatible endpoints.
+use_path_style = false
+key_prefix = "santa/telemetry"
+
+[paths]
+queue_dir = "/var/lib/santa-sleigh/queue"
+archive_dir = "/var/lib/santa-sleigh/archive"
+log_dir = "/var/log/santa-sleigh"
+
+[logging]
+level = "info"
+file = "/var/log/santa-sleigh/santa-sleigh.log"
+
+[upload]
+concurrency = 4
+poll_interval = "15s"
+max_retries = 3
+staging_suffix = ".partial"

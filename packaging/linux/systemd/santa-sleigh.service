@@ -1,0 +1,18 @@
+[Unit]
+Description=Santa Sleigh telemetry uploader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=santa-sleigh
+Group=santa-sleigh
+ExecStart=/usr/local/bin/santa-sleigh -config /etc/santa-sleigh/config.toml
+EnvironmentFile=-/etc/default/santa-sleigh
+WorkingDirectory=/var/lib/santa-sleigh
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

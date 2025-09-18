@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.kallsyms.santa-sleigh</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/santa-sleigh</string>
+		<string>-config</string>
+		<string>/Library/Application Support/SantaSleigh/config.toml</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>NetworkState</key>
+		<true/>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Library/Logs/SantaSleigh/santa-sleigh.launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Library/Logs/SantaSleigh/santa-sleigh.launchd.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Library/Application Support/SantaSleigh</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>UserName</key>
+	<string>root</string>
+	<key>GroupName</key>
+	<string>wheel</string>
+</dict>
+</plist>

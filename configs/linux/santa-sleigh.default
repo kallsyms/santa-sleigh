@@ -1,0 +1,6 @@
+# Environment overrides for the santa-sleigh service
+# Uncomment and set if you prefer to keep AWS credentials out of the TOML file.
+# AWS_ACCESS_KEY_ID=
+# AWS_SECRET_ACCESS_KEY=
+# AWS_SESSION_TOKEN=
+# AWS_REGION=

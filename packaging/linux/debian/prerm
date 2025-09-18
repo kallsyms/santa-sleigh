@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+SERVICE="santa-sleigh.service"
+
+if [ "$1" = "remove" ] || [ "$1" = "upgrade" ]; then
+    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+fi
+
+exit 0

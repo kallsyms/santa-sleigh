@@ -1,0 +1,39 @@
+#!/bin/sh
+set -e
+
+USER="santa-sleigh"
+GROUP="santa-sleigh"
+CONFIG_DIR="/etc/santa-sleigh"
+DATA_DIR="/var/lib/santa-sleigh"
+LOG_DIR="/var/log/santa-sleigh"
+DEFAULTS="/etc/default/santa-sleigh"
+SYSTEMD_SERVICE="santa-sleigh.service"
+
+if ! getent group "$GROUP" >/dev/null 2>&1; then
+    addgroup --system "$GROUP"
+fi
+
+if ! id -u "$USER" >/dev/null 2>&1; then
+    adduser --system --ingroup "$GROUP" --no-create-home --home "$DATA_DIR" --shell /usr/sbin/nologin "$USER"
+fi
+
+mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
+chown "$USER":"$GROUP" "$DATA_DIR" "$LOG_DIR"
+chmod 0750 "$DATA_DIR" "$LOG_DIR"
+
+if [ ! -f "$CONFIG_DIR/config.toml" ] && [ -f "$CONFIG_DIR/config.toml.sample" ]; then
+    cp "$CONFIG_DIR/config.toml.sample" "$CONFIG_DIR/config.toml"
+    chmod 0640 "$CONFIG_DIR/config.toml"
+fi
+
+if [ ! -f "$DEFAULTS" ] && [ -f "$DEFAULTS.sample" ]; then
+    cp "$DEFAULTS.sample" "$DEFAULTS"
+    chmod 0640 "$DEFAULTS"
+fi
+
+systemctl daemon-reload >/dev/null 2>&1 || true
+if systemctl is-enabled "$SYSTEMD_SERVICE" >/dev/null 2>&1; then
+    systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+fi
+
+exit 0

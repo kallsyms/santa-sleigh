@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+CONF_DIR="/Library/Application Support/SantaSleigh"
+LOG_DIR="/Library/Logs/SantaSleigh"
+PLIST="/Library/LaunchDaemons/com.kallsyms.santa-sleigh.plist"
+CONFIG_FILE="$CONF_DIR/config.toml"
+SAMPLE="/Library/Application Support/SantaSleigh/config.toml.sample"
+
+/usr/sbin/install -d -m 0755 "$CONF_DIR"
+/usr/sbin/install -d -m 0755 "$LOG_DIR"
+
+if [ ! -f "$CONFIG_FILE" ] && [ -f "$SAMPLE" ]; then
+  /bin/cp "$SAMPLE" "$CONFIG_FILE"
+  /bin/chmod 0640 "$CONFIG_FILE"
+fi
+
+/usr/sbin/chown root:wheel "$PLIST"
+/bin/chmod 0644 "$PLIST"
+
+/bin/launchctl bootout system "$PLIST" 2>/dev/null || true
+/bin/launchctl bootstrap system "$PLIST"
+/bin/launchctl enable system/com.kallsyms.santa-sleigh
+/bin/launchctl kickstart -k system/com.kallsyms.santa-sleigh 2>/dev/null || true
+
+exit 0
