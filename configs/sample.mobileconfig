@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key>
+  <string>Santa Configuration</string>
+  <key>PayloadEnabled</key>
+  <true/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadScope</key>
+  <string>System</string>
+  <key>PayloadUUID</key>
+  <string>08b02a5a-b44e-43e9-ae35-a1479e9c7969</string>
+  <key>PayloadIdentifier</key>
+  <string>b10cd4d7-b85d-47e6-bc8d-c5fd429816f3</string>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>Telemetry</key>
+      <array>
+        <string>Everything</string>
+      </array>
+      <key>EventLogType</key>
+      <string>json</string>
+      <key>EventLogPath</key>
+      <string>/var/db/santa/log.ndjson</string>
+      <key>PayloadDisplayName</key>
+      <string>Santa</string>
+      <key>PayloadIdentifier</key>
+      <string>com.northpolesec.santa.e85593f8-ffa2-402c-9021-9b92a9e4a894</string>
+      <key>PayloadUUID</key>
+      <string>4ddba831-82fd-4907-a022-3dd6186faaa9</string>
+      <key>PayloadType</key>
+      <string>com.northpolesec.santa</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+  </array>
+</dict>
+</plist>

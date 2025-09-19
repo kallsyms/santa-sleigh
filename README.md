@@ -81,6 +81,19 @@ The systemd unit is installed to `/lib/systemd/system/santa-sleigh.service` and 
    ```
 3. The package is emitted to `dist/macos/santa-sleigh-1.0.0.pkg` and installs the binary, launchd plist, and a sample config. The post-install script bootstraps the launchd service.
 
+### Homebrew Tap
+
+The repository doubles as a Homebrew tap once a tagged release lands:
+
+```bash
+brew tap kallsyms/santa-sleigh
+brew install santa-sleigh
+# or install the latest commit
+brew install --HEAD kallsyms/santa-sleigh/santa-sleigh
+```
+
+The release workflow refreshes the formula automatically via `packaging/homebrew/update_formula.sh`. Run that script manually if you publish outside of GitHub Actions.
+
 ### Debian `.deb`
 
 1. Cross-compile a linux/amd64 binary: `make build-linux`.

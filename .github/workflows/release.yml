@@ -64,15 +64,85 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: dist
       - name: Prepare release files
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p release
-          mv dist/linux-artifacts/* release/
-          mv dist/macos-artifacts/* release/
+
+          # Linux artifacts
+          if [[ -d dist/linux-artifacts/dist/linux ]]; then
+            if [[ -f dist/linux-artifacts/dist/linux/santa-sleigh ]]; then
+              mv dist/linux-artifacts/dist/linux/santa-sleigh release/santa-sleigh-linux-amd64
+            fi
+            for path in dist/linux-artifacts/dist/linux/*; do
+              base="$(basename "$path")"
+              [[ "$base" == "santa-sleigh" ]] && continue
+              mv "$path" "release/$base"
+            done
+          fi
+
+          # macOS artifacts
+          if [[ -d dist/macos-artifacts/dist/darwin ]]; then
+            if [[ -f dist/macos-artifacts/dist/darwin/santa-sleigh ]]; then
+              mv dist/macos-artifacts/dist/darwin/santa-sleigh release/santa-sleigh-darwin-arm64
+            fi
+            if [[ -f dist/macos-artifacts/dist/darwin/santa-sleigh-amd64 ]]; then
+              mv dist/macos-artifacts/dist/darwin/santa-sleigh-amd64 release/santa-sleigh-darwin-amd64
+            fi
+            if [[ -f dist/macos-artifacts/dist/darwin/universal/santa-sleigh ]]; then
+              mv dist/macos-artifacts/dist/darwin/universal/santa-sleigh release/santa-sleigh-darwin-universal
+            fi
+            for path in dist/macos-artifacts/dist/darwin/*; do
+              base="$(basename "$path")"
+              case "$base" in
+                santa-sleigh|santa-sleigh-amd64|universal)
+                  continue
+                  ;;
+              esac
+              if [[ -f "$path" ]]; then
+                mv "$path" "release/$base"
+              fi
+            done
+            if [[ -d dist/macos-artifacts/dist/darwin/universal ]]; then
+              for path in dist/macos-artifacts/dist/darwin/universal/*; do
+                base="$(basename "$path")"
+                [[ "$base" == "santa-sleigh" ]] && continue
+                if [[ -f "$path" ]]; then
+                  mv "$path" "release/$base"
+                fi
+              done
+            fi
+          fi
+
+          if [[ -d dist/macos-artifacts/dist/macos ]]; then
+            for pkg in dist/macos-artifacts/dist/macos/*.pkg; do
+              mv "$pkg" "release/$(basename "$pkg")"
+            done
+          fi
+      - name: Update Homebrew formula
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          ./packaging/homebrew/update_formula.sh "$VERSION"
+      - name: Commit Homebrew formula update
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          if ! git diff --quiet Formula/santa-sleigh.rb; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Formula/santa-sleigh.rb
+            git commit -m "Update Homebrew formula for ${VERSION}"
+            git push origin HEAD:main
+          fi
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
