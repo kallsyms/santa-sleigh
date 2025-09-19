@@ -1,8 +1,8 @@
 class SantaSleigh < Formula
   desc "Telemetry uploader for Santa endpoint security agent"
   homepage "https://github.com/kallsyms/santa-sleigh"
-  url "https://github.com/kallsyms/santa-sleigh/archive/refs/tags/v0.0.2.tar.gz"
-  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+  url "https://github.com/kallsyms/santa-sleigh/archive/refs/tags/v0.0.3.tar.gz"
+  sha256 "e341159edbb8fb7cb9098411ba927332e745cb762af46e48cb18db1e5a9618a1"
   license "Apache-2.0"
   head "https://github.com/kallsyms/santa-sleigh.git", branch: "main"
 
