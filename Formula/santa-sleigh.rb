@@ -1,8 +1,8 @@
 class SantaSleigh < Formula
   desc "Telemetry uploader for Santa endpoint security agent"
   homepage "https://github.com/kallsyms/santa-sleigh"
-  url "https://github.com/kallsyms/santa-sleigh/archive/refs/tags/v0.0.4.tar.gz"
-  sha256 "56a5daeb019e8095ff87af78e83d57c08a4d196647a59e7a6b9168e637cffc15"
+  url "https://github.com/kallsyms/santa-sleigh/archive/refs/tags/v0.0.5.tar.gz"
+  sha256 "03afcbb401c11a065d32f526a8b3ae7be401f02928da5055eca37aae7aff74f2"
   license "Apache-2.0"
   head "https://github.com/kallsyms/santa-sleigh.git", branch: "main"
 
@@ -38,7 +38,8 @@ class SantaSleigh < Formula
 
         sudo brew services start #{tap}/#{name}
 
-      Logs are written to /var/log/santa-sleigh/santa-sleigh.log (configurable in #{etc}/santa-sleigh/config.toml).
+      Logs are written to /var/log/santa-sleigh/santa-sleigh.log by default. Update
+      #{etc}/santa-sleigh/config.toml if you want a different location.
     EOS
   end
 
