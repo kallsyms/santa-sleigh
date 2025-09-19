@@ -6,12 +6,16 @@ For other Santa-compatible daemons, native parquet upload is also supported.
 
 ## Configuration
 
-Santa Sleigh reads configuration from a TOML file. The default location is:
+Santa Sleigh reads its configuration from a TOML file. The default location is:
 
 - macOS: `/Library/Application Support/SantaSleigh/config.toml`
 - Linux: `/etc/santa-sleigh/config.toml`
 
 A sample file is provided at `configs/santa-sleigh.sample.toml`.
+
+### Santa Configuration
+
+Santa must be configured to emit JSON telemetry. See the [sample Santa configuration profile](./configs/sample.mobileconfig) for reference on how to configure Santa for this.
 
 ### Upload Modes
 

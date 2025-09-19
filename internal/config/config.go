@@ -93,17 +93,17 @@ func DefaultConfigPath() string {
 // DefaultQueueDir returns the OS-specific directory for pending telemetry.
 func DefaultQueueDir() string {
 	if runtime.GOOS == "darwin" {
-		return "/Library/Application Support/SantaSleigh/queue"
+		return "/var/db/santa/spool"
 	}
-	return "/var/lib/santa-sleigh/queue"
+	return "/var/log/pedro/spool"
 }
 
 // DefaultJSONInputPath returns the default telemetry log file for JSON mode.
 func DefaultJSONInputPath() string {
 	if runtime.GOOS == "darwin" {
-		return "/Library/Application Support/SantaSleigh/telemetry.jsonl"
+		return "/var/db/santa/log.ndjson"
 	}
-	return "/var/lib/santa-sleigh/telemetry.jsonl"
+	return "/var/log/pedro/log.ndjson"
 }
 
 // Load reads a TOML configuration file, applies defaults, and validates the result.
