@@ -58,7 +58,7 @@ class SantaSleigh < Formula
   def install
     build_version = build.head? ? "head" : version
     ldflags = "-s -w -X github.com/kallsyms/santa-sleigh/internal/daemon.version=#{build_version}"
-    system "go", "build", *std_go_args(output: bin/"santa-sleigh", ldflags: ldflags)
+    system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"santa-sleigh"), "./cmd/santa-sleigh"
     pkgshare.install "configs/santa-sleigh.sample.toml"
   end
 
