@@ -86,8 +86,8 @@ The systemd unit is installed to `/lib/systemd/system/santa-sleigh.service` and 
 The repository doubles as a Homebrew tap once a tagged release lands:
 
 ```bash
-brew tap kallsyms/santa-sleigh
-brew install santa-sleigh
+brew tap kallsyms/santa-sleigh https://github.com/kallsyms/santa-sleigh
+brew install kallsyms/santa-sleigh/santa-sleigh
 # or install the latest commit
 brew install --HEAD kallsyms/santa-sleigh/santa-sleigh
 ```
