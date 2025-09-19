@@ -1,6 +1,6 @@
 # Santa Sleigh
 
-Santa Sleigh is a cross-platform daemon that ships telemetry bundles collected by the [Santa](https://github.com/google/santa) endpoint security agent to an S3-compatible object store. It watches a queue directory for new files, uploads them to S3, and archives successfully transferred payloads.
+Santa Sleigh is a cross-platform daemon that ships telemetry bundles collected by the [Santa](https://github.com/google/santa) endpoint security agent to an S3-compatible object store. It watches a queue directory for new files, uploads them to S3, and removes the local copy after each successful transfer.
 
 ## Features
 
@@ -21,9 +21,14 @@ Santa Sleigh reads configuration from a TOML file. The default location is:
 A sample file is provided at `configs/santa-sleigh.sample.toml`. Key sections include:
 
 - `[aws]` – bucket name, region, optional credentials and custom endpoints.
-- `[paths]` – queue, archive, and log directories.
 - `[logging]` – log level and log file location.
-- `[upload]` – concurrency, polling interval, retry count, staging suffix.
+- `[upload]` – queue location and behaviour (`mode`, concurrency, polling interval, retry count, staging suffix, JSON rotation thresholds).
+- Objects land in S3 under `key_prefix/hostname=<host>/date=<YYYYMMDD>/…` for efficient partitioned querying.
+
+### Upload Modes
+
+- **parquet** (default): Treats `upload.queue` as a directory of pre-segmented parquet bundles. Files are uploaded concurrently and deleted after a successful transfer.
+- **json**: Treats `upload.queue` as the path to the live JSON telemetry file written by Santa (e.g. `/var/log/santa/telemetry.jsonl`). Santa Sleigh tails the file and, every `upload.json_max_interval` (default 5 minutes) or after `upload.json_max_bytes` (default 10 MB) comprising new data, compresses, uploads, rotates the file on disk, and deletes the processed chunk once the upload succeeds.
 
 Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`) are applied automatically when values are omitted from the configuration file.
 
@@ -89,7 +94,7 @@ The systemd unit is installed to `/lib/systemd/system/santa-sleigh.service` and 
 
 - `go test ./...` exercises the codebase.
 - The daemon logs to both stdout and the configured log file using structured JSON output (`log/slog`).
-- Uploaded files are staged with a suffix (default `.partial`) to avoid duplicate work and archived on success.
+- Uploaded files are staged with a suffix (default `.partial`) to avoid duplicate work and are removed once they land successfully in S3.
 - Version information can be overridden with `-ldflags "-X github.com/kallsyms/santa-sleigh/internal/daemon.version=<value>"`.
 
 ## Repository Layout
@@ -105,4 +110,3 @@ scripts/            Convenience installers for macOS/Linux
 packaging/          Launchd, systemd, and packaging helpers
 .github/workflows   CI workflows for build and release
 ```
-

@@ -11,17 +11,18 @@ bucket = "my-santa-telemetry"
 use_path_style = false
 key_prefix = "santa/telemetry"
 
-[paths]
-queue_dir = "/var/lib/santa-sleigh/queue"
-archive_dir = "/var/lib/santa-sleigh/archive"
-log_dir = "/var/log/santa-sleigh"
-
 [logging]
 level = "info"
 file = "/var/log/santa-sleigh/santa-sleigh.log"
 
 [upload]
+mode = "parquet"            # "parquet" or "json"
+# For parquet mode this is treated as a directory of files to process.
+# For json mode this is the file that santa-sleigh tails and rotates.
+queue = "/var/lib/santa-sleigh/queue"
 concurrency = 4
 poll_interval = "15s"
 max_retries = 3
 staging_suffix = ".partial"
+json_max_bytes = 10485760       # 10 MB default
+json_max_interval = "5m"       # Rotate at least every 5 minutes

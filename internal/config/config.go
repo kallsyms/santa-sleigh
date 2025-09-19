@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pelletier/go-toml/v2"
+	"github.com/BurntSushi/toml"
 )
 
 // Duration wraps time.Duration to support TOML decoding from strings like "15s".
@@ -39,7 +39,6 @@ func (d Duration) MarshalText() ([]byte, error) {
 // Config captures runtime configuration loaded from TOML.
 type Config struct {
 	AWS     AWSConfig     `toml:"aws"`
-	Paths   PathsConfig   `toml:"paths"`
 	Logging LoggingConfig `toml:"logging"`
 	Upload  UploadConfig  `toml:"upload"`
 }
@@ -57,13 +56,6 @@ type AWSConfig struct {
 	S3Prefix     string `toml:"key_prefix"`
 }
 
-// PathsConfig holds filesystem locations used by the daemon.
-type PathsConfig struct {
-	QueueDir   string `toml:"queue_dir"`
-	ArchiveDir string `toml:"archive_dir"`
-	LogDir     string `toml:"log_dir"`
-}
-
 // LoggingConfig sets the log destination and verbosity.
 type LoggingConfig struct {
 	Level string `toml:"level"`
@@ -72,11 +64,23 @@ type LoggingConfig struct {
 
 // UploadConfig tunes the daemon behaviour for uploads.
 type UploadConfig struct {
-	Concurrency   int      `toml:"concurrency"`
-	PollInterval  Duration `toml:"poll_interval"`
-	MaxRetries    int      `toml:"max_retries"`
-	StagingSuffix string   `toml:"staging_suffix"`
+	Concurrency     int        `toml:"concurrency"`
+	PollInterval    Duration   `toml:"poll_interval"`
+	MaxRetries      int        `toml:"max_retries"`
+	StagingSuffix   string     `toml:"staging_suffix"`
+	Mode            UploadMode `toml:"mode"`
+	Queue           string     `toml:"queue"`
+	JSONMaxBytes    int64      `toml:"json_max_bytes"`
+	JSONMaxInterval Duration   `toml:"json_max_interval"`
 }
+
+// UploadMode selects between parquet directory processing and JSON tailing.
+type UploadMode string
+
+const (
+	ModeParquet UploadMode = "parquet"
+	ModeJSON    UploadMode = "json"
+)
 
 // DefaultConfigPath returns the OS-specific default config path.
 func DefaultConfigPath() string {
@@ -94,20 +98,12 @@ func DefaultQueueDir() string {
 	return "/var/lib/santa-sleigh/queue"
 }
 
-// DefaultArchiveDir returns the OS-specific directory for archived telemetry.
-func DefaultArchiveDir() string {
+// DefaultJSONInputPath returns the default telemetry log file for JSON mode.
+func DefaultJSONInputPath() string {
 	if runtime.GOOS == "darwin" {
-		return "/Library/Application Support/SantaSleigh/archive"
+		return "/Library/Application Support/SantaSleigh/telemetry.jsonl"
 	}
-	return "/var/lib/santa-sleigh/archive"
-}
-
-// DefaultLogDir returns the OS-specific directory for logs.
-func DefaultLogDir() string {
-	if runtime.GOOS == "darwin" {
-		return "/Library/Logs/SantaSleigh"
-	}
-	return "/var/log/santa-sleigh"
+	return "/var/lib/santa-sleigh/telemetry.jsonl"
 }
 
 // Load reads a TOML configuration file, applies defaults, and validates the result.
@@ -132,6 +128,11 @@ func Load(overridePath string) (*Config, error) {
 }
 
 func (c *Config) applyDefaults(configPath string) {
+	if c.Upload.Mode == "" {
+		c.Upload.Mode = ModeParquet
+	} else {
+		c.Upload.Mode = UploadMode(strings.ToLower(string(c.Upload.Mode)))
+	}
 	if c.AWS.AccessKey == "" {
 		c.AWS.AccessKey = os.Getenv("AWS_ACCESS_KEY_ID")
 	}
@@ -144,14 +145,12 @@ func (c *Config) applyDefaults(configPath string) {
 	if c.AWS.Region == "" {
 		c.AWS.Region = os.Getenv("AWS_REGION")
 	}
-	if c.Paths.QueueDir == "" {
-		c.Paths.QueueDir = DefaultQueueDir()
-	}
-	if c.Paths.ArchiveDir == "" {
-		c.Paths.ArchiveDir = DefaultArchiveDir()
-	}
-	if c.Paths.LogDir == "" {
-		c.Paths.LogDir = DefaultLogDir()
+	if c.Upload.Queue == "" {
+		if c.Upload.Mode == ModeJSON {
+			c.Upload.Queue = DefaultJSONInputPath()
+		} else {
+			c.Upload.Queue = DefaultQueueDir()
+		}
 	}
 	if c.Logging.Level == "" {
 		c.Logging.Level = "info"
@@ -161,7 +160,11 @@ func (c *Config) applyDefaults(configPath string) {
 		if base == "" {
 			base = "config.toml"
 		}
-		c.Logging.File = filepath.Join(c.Paths.LogDir, "santa-sleigh.log")
+		if runtime.GOOS == "darwin" {
+			c.Logging.File = "/Library/Logs/SantaSleigh/santa-sleigh.log"
+		} else {
+			c.Logging.File = "/var/log/santa-sleigh/santa-sleigh.log"
+		}
 	}
 	if c.Upload.Concurrency <= 0 {
 		c.Upload.Concurrency = 4
@@ -175,18 +178,35 @@ func (c *Config) applyDefaults(configPath string) {
 	if c.Upload.StagingSuffix == "" {
 		c.Upload.StagingSuffix = ".partial"
 	}
+	if c.Upload.JSONMaxBytes <= 0 {
+		c.Upload.JSONMaxBytes = 10 * 1024 * 1024
+	}
+	if c.Upload.JSONMaxInterval.Duration == 0 {
+		c.Upload.JSONMaxInterval = Duration{Duration: 5 * time.Minute}
+	}
 }
 
 func (c *Config) validate() error {
 	var errs []string
+	switch c.Upload.Mode {
+	case ModeParquet, ModeJSON:
+	default:
+		errs = append(errs, "upload.mode must be \"json\" or \"parquet\"")
+	}
 	if c.AWS.Region == "" {
 		errs = append(errs, "aws.region must be set")
 	}
 	if c.AWS.Bucket == "" {
 		errs = append(errs, "aws.bucket must be set")
 	}
-	if c.Paths.QueueDir == "" {
-		errs = append(errs, "paths.queue_dir must be set")
+	if c.Upload.Queue == "" {
+		errs = append(errs, "upload.queue must be set")
+	}
+	if c.Upload.JSONMaxBytes <= 0 {
+		errs = append(errs, "upload.json_max_bytes must be greater than 0")
+	}
+	if c.Upload.JSONMaxInterval.Duration <= 0 {
+		errs = append(errs, "upload.json_max_interval must be greater than 0")
 	}
 	if c.Logging.File == "" {
 		errs = append(errs, "logging.file must be set")

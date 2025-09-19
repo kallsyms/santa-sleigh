@@ -1,13 +1,15 @@
 package daemon
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -19,14 +21,33 @@ import (
 
 // Daemon coordinates scanning a queue directory and shipping entries to S3.
 type Daemon struct {
-	cfg      *config.Config
-	uploader uploader.Uploader
-	logger   *slog.Logger
+	cfg           *config.Config
+	uploader      uploader.Uploader
+	logger        *slog.Logger
+	mode          config.UploadMode
+	lastJSONFlush time.Time
+	hostname      string
 }
 
 // New builds a daemon instance with the supplied configuration and dependencies.
 func New(cfg *config.Config, up uploader.Uploader, logger *slog.Logger) *Daemon {
-	return &Daemon{cfg: cfg, uploader: up, logger: logger}
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+	host = strings.ToLower(host)
+	host = strings.ReplaceAll(host, " ", "-")
+	host = strings.ReplaceAll(host, "/", "-")
+	host = strings.ReplaceAll(host, ":", "-")
+
+	return &Daemon{
+		cfg:           cfg,
+		uploader:      up,
+		logger:        logger,
+		mode:          cfg.Upload.Mode,
+		lastJSONFlush: time.Now(),
+		hostname:      host,
+	}
 }
 
 // Run blocks until the context is cancelled or a fatal error occurs.
@@ -57,7 +78,14 @@ func (d *Daemon) Run(ctx context.Context) error {
 }
 
 func (d *Daemon) ensureDirectories() error {
-	dirs := []string{d.cfg.Paths.QueueDir, d.cfg.Paths.ArchiveDir, filepath.Dir(d.cfg.Logging.File)}
+	var dirs []string
+	queuePath := d.cfg.Upload.Queue
+	if d.mode == config.ModeJSON {
+		dirs = append(dirs, filepath.Dir(queuePath))
+	} else {
+		dirs = append(dirs, queuePath)
+	}
+	dirs = append(dirs, filepath.Dir(d.cfg.Logging.File))
 	for _, dir := range dirs {
 		if dir == "" {
 			continue
@@ -66,11 +94,30 @@ func (d *Daemon) ensureDirectories() error {
 			return fmt.Errorf("create directory %s: %w", dir, err)
 		}
 	}
+	if d.mode == config.ModeJSON {
+		filePath := queuePath
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR, 0o640)
+		if err != nil {
+			return fmt.Errorf("create json input file %s: %w", filePath, err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close json input file %s: %w", filePath, err)
+		}
+	}
 	return nil
 }
 
 func (d *Daemon) scanAndUpload(ctx context.Context) error {
-	entries, err := os.ReadDir(d.cfg.Paths.QueueDir)
+	switch d.mode {
+	case config.ModeJSON:
+		return d.processJSON(ctx)
+	default:
+		return d.processParquet(ctx)
+	}
+}
+
+func (d *Daemon) processParquet(ctx context.Context) error {
+	entries, err := os.ReadDir(d.cfg.Upload.Queue)
 	if err != nil {
 		return fmt.Errorf("read queue dir: %w", err)
 	}
@@ -83,7 +130,7 @@ func (d *Daemon) scanAndUpload(ctx context.Context) error {
 		if d.cfg.Upload.StagingSuffix != "" && strings.HasSuffix(name, d.cfg.Upload.StagingSuffix) {
 			continue
 		}
-		files = append(files, filepath.Join(d.cfg.Paths.QueueDir, name))
+		files = append(files, filepath.Join(d.cfg.Upload.Queue, name))
 	}
 
 	if len(files) == 0 {
@@ -158,28 +205,30 @@ func (d *Daemon) processFile(ctx context.Context, path string) error {
 	default:
 	}
 
-	key := d.objectKey(filepath.Base(path))
+	key := d.objectKey(filepath.Base(path), info.ModTime())
 	if err := d.uploader.Upload(ctx, key, file, info.Size()); err != nil {
 		return fmt.Errorf("upload %s: %w", claimedPath, err)
 	}
 
-	if err := d.archive(claimedPath, filepath.Base(path)); err != nil {
-		return fmt.Errorf("archive %s: %w", claimedPath, err)
+	if err := os.Remove(claimedPath); err != nil {
+		return fmt.Errorf("remove %s: %w", claimedPath, err)
 	}
 
 	d.logger.Info("uploaded", slog.String("key", key), slog.Int64("size_bytes", info.Size()))
 	return nil
 }
 
-func (d *Daemon) objectKey(filename string) string {
-	key := filename
-	if d.cfg.AWS.S3Prefix != "" {
-		key = filepath.Join(d.cfg.AWS.S3Prefix, filename)
+func (d *Daemon) objectKey(filename string, ts time.Time) string {
+	parts := make([]string, 0, 4)
+	if prefix := strings.Trim(d.cfg.AWS.S3Prefix, "/"); prefix != "" {
+		parts = append(parts, prefix)
 	}
-	if runtime.GOOS == "windows" {
-		return strings.ReplaceAll(key, "\\", "/")
-	}
-	return filepath.ToSlash(key)
+	parts = append(parts,
+		fmt.Sprintf("hostname=%s", d.hostname),
+		fmt.Sprintf("date=%s", ts.UTC().Format("20060102")),
+		filename,
+	)
+	return path.Join(parts...)
 }
 
 func (d *Daemon) claim(path string) (string, func() error, error) {
@@ -207,16 +256,93 @@ func (d *Daemon) claim(path string) (string, func() error, error) {
 	return stagingPath, release, nil
 }
 
-func (d *Daemon) archive(stagingPath, originalName string) error {
-	destination := filepath.Join(d.cfg.Paths.ArchiveDir, originalName)
-	if err := os.MkdirAll(d.cfg.Paths.ArchiveDir, 0o755); err != nil {
-		return fmt.Errorf("create archive dir: %w", err)
+func (d *Daemon) processJSON(ctx context.Context) error {
+	path := d.cfg.Upload.Queue
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("stat json input %s: %w", path, err)
 	}
-	if err := moveFile(stagingPath, destination); err == nil {
+	size := info.Size()
+	if size == 0 {
 		return nil
 	}
 
-	// Fallback to timestamp-based name if collision occurs.
-	timestamped := fmt.Sprintf("%s-%d", originalName, time.Now().UnixNano())
-	return moveFile(stagingPath, filepath.Join(d.cfg.Paths.ArchiveDir, timestamped))
+	now := time.Now()
+	maxBytes := d.cfg.Upload.JSONMaxBytes
+	if maxBytes <= 0 {
+		maxBytes = 10 * 1024 * 1024
+	}
+	maxInterval := d.cfg.Upload.JSONMaxInterval.Duration
+	if maxInterval <= 0 {
+		maxInterval = 5 * time.Minute
+	}
+	if size < maxBytes && now.Sub(d.lastJSONFlush) < maxInterval {
+		return nil
+	}
+
+	rotatedPath, err := d.rotateJSONInput(path, info, now)
+	if err != nil {
+		return err
+	}
+	if rotatedPath == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(rotatedPath)
+	if err != nil {
+		return fmt.Errorf("read rotated json input %s: %w", rotatedPath, err)
+	}
+	if len(data) == 0 {
+		_ = os.Remove(rotatedPath)
+		return nil
+	}
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return fmt.Errorf("compress json payload: %w", err)
+	}
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("finalise compression: %w", err)
+	}
+
+	base := filepath.Base(path)
+	nameRoot := strings.TrimSuffix(base, filepath.Ext(base))
+	if nameRoot == "" {
+		nameRoot = "telemetry"
+	}
+	objectName := fmt.Sprintf("%s-%s.json.gz", nameRoot, now.UTC().Format("20060102T150405Z"))
+	objectKey := d.objectKey(objectName, now)
+
+	compressed := buf.Bytes()
+	if err := d.uploader.Upload(ctx, objectKey, bytes.NewReader(compressed), int64(len(compressed))); err != nil {
+		return fmt.Errorf("upload json payload: %w", err)
+	}
+	d.lastJSONFlush = now
+
+	if err := os.Remove(rotatedPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		d.logger.Warn("remove rotated json input", slog.String("path", rotatedPath), slog.String("error", err.Error()))
+	}
+
+	d.logger.Info("uploaded json chunk", slog.String("key", objectKey), slog.Int("raw_bytes", len(data)), slog.Int("compressed_bytes", len(compressed)))
+	return nil
+}
+
+func (d *Daemon) rotateJSONInput(path string, info os.FileInfo, ts time.Time) (string, error) {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	rotatedName := fmt.Sprintf("%s.%s", base, ts.UTC().Format("20060102T150405Z"))
+	rotatedPath := filepath.Join(dir, rotatedName)
+
+	if err := os.Rename(path, rotatedPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("rotate json input: %w", err)
+	}
+
+	return rotatedPath, nil
 }
