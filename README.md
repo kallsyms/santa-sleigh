@@ -95,6 +95,12 @@ brew install --cask kallsyms/santa-sleigh/santa-sleigh
 brew install kallsyms/santa-sleigh/santa-sleigh
 # or install the latest commit
 brew install --HEAD kallsyms/santa-sleigh/santa-sleigh
+
+# Santa Sleigh needs root to tail Santa telemetry files. Start the service with:
+sudo brew services start kallsyms/santa-sleigh/santa-sleigh
+
+Logs default to `/var/log/santa-sleigh/santa-sleigh.log`; adjust `logging.file`
+in `/opt/homebrew/etc/santa-sleigh/config.toml` if you prefer a user-writable path.
 ```
 
 The release workflow refreshes the formula automatically via `packaging/homebrew/update_formula.sh`. Run that script manually if you publish outside of GitHub Actions.

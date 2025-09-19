@@ -31,6 +31,17 @@ class SantaSleigh < Formula
     error_log_path var/"log/santa-sleigh/homebrew.log"
   end
 
+  def caveats
+    <<~EOS
+      Santa Sleigh needs root privileges to read Santa telemetry logs and write to /var/log.
+      Start the service with sudo so it runs as a LaunchDaemon:
+
+        sudo brew services start #{tap}/#{name}
+
+      Logs are written to /var/log/santa-sleigh/santa-sleigh.log (configurable in #{etc}/santa-sleigh/config.toml).
+    EOS
+  end
+
   test do
     assert_match "Usage of", shell_output("#{bin}/santa-sleigh -h 2>&1")
   end
