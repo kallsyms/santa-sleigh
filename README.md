@@ -87,6 +87,11 @@ The repository doubles as a Homebrew tap once a tagged release lands:
 
 ```bash
 brew tap kallsyms/santa-sleigh https://github.com/kallsyms/santa-sleigh
+
+# Install the prebuilt macOS package
+brew install --cask kallsyms/santa-sleigh/santa-sleigh
+
+# Or build from source (takes Go toolchain time)
 brew install kallsyms/santa-sleigh/santa-sleigh
 # or install the latest commit
 brew install --HEAD kallsyms/santa-sleigh/santa-sleigh

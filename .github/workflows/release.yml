@@ -73,74 +73,49 @@ jobs:
           path: dist
       - name: Prepare release files
         run: |
-          set -euo pipefail
-          shopt -s nullglob
-
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p release
 
-          # Linux artifacts
-          if [[ -d dist/linux-artifacts/dist/linux ]]; then
-            if [[ -f dist/linux-artifacts/dist/linux/santa-sleigh ]]; then
-              mv dist/linux-artifacts/dist/linux/santa-sleigh release/santa-sleigh-linux-amd64
-            fi
-            for path in dist/linux-artifacts/dist/linux/*; do
-              base="$(basename "$path")"
-              [[ "$base" == "santa-sleigh" ]] && continue
-              mv "$path" "release/$base"
-            done
+          linux_bin=$(find dist -type f -name 'santa-sleigh' -path '*linux*' | head -n1)
+          if [[ -n "$linux_bin" ]]; then
+            cp "$linux_bin" "release/santa-sleigh-${VERSION}-linux-amd64"
           fi
 
-          # macOS artifacts
-          if [[ -d dist/macos-artifacts/dist/darwin ]]; then
-            if [[ -f dist/macos-artifacts/dist/darwin/santa-sleigh ]]; then
-              mv dist/macos-artifacts/dist/darwin/santa-sleigh release/santa-sleigh-darwin-arm64
-            fi
-            if [[ -f dist/macos-artifacts/dist/darwin/santa-sleigh-amd64 ]]; then
-              mv dist/macos-artifacts/dist/darwin/santa-sleigh-amd64 release/santa-sleigh-darwin-amd64
-            fi
-            if [[ -f dist/macos-artifacts/dist/darwin/universal/santa-sleigh ]]; then
-              mv dist/macos-artifacts/dist/darwin/universal/santa-sleigh release/santa-sleigh-darwin-universal
-            fi
-            for path in dist/macos-artifacts/dist/darwin/*; do
-              base="$(basename "$path")"
-              case "$base" in
-                santa-sleigh|santa-sleigh-amd64|universal)
-                  continue
-                  ;;
-              esac
-              if [[ -f "$path" ]]; then
-                mv "$path" "release/$base"
-              fi
-            done
-            if [[ -d dist/macos-artifacts/dist/darwin/universal ]]; then
-              for path in dist/macos-artifacts/dist/darwin/universal/*; do
-                base="$(basename "$path")"
-                [[ "$base" == "santa-sleigh" ]] && continue
-                if [[ -f "$path" ]]; then
-                  mv "$path" "release/$base"
-                fi
-              done
-            fi
+          find dist -type f -name '*.deb' -print0 | while IFS= read -r -d '' deb; do
+            cp "$deb" "release/$(basename "$deb")"
+          done
+
+          mac_arm=$(find dist -type f -name 'santa-sleigh' -path '*darwin*' ! -path '*universal*' ! -name '*amd64*' | head -n1)
+          if [[ -n "$mac_arm" ]]; then
+            cp "$mac_arm" "release/santa-sleigh-${VERSION}-darwin-arm64"
           fi
 
-          if [[ -d dist/macos-artifacts/dist/macos ]]; then
-            for pkg in dist/macos-artifacts/dist/macos/*.pkg; do
-              mv "$pkg" "release/$(basename "$pkg")"
-            done
+          mac_amd=$(find dist -type f -name 'santa-sleigh-amd64' | head -n1)
+          if [[ -n "$mac_amd" ]]; then
+            cp "$mac_amd" "release/santa-sleigh-${VERSION}-darwin-amd64"
           fi
-      - name: Update Homebrew formula
+
+          mac_universal=$(find dist -type f -name 'santa-sleigh' -path '*universal*' | head -n1)
+          if [[ -n "$mac_universal" ]]; then
+            cp "$mac_universal" "release/santa-sleigh-${VERSION}-darwin-universal"
+          fi
+
+          find dist -type f -name 'santa-sleigh-*.pkg' -print0 | while IFS= read -r -d '' pkg; do
+            cp "$pkg" "release/$(basename "$pkg")"
+          done
+      - name: Update Homebrew formula and cask
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          ./packaging/homebrew/update_formula.sh "$VERSION"
-      - name: Commit Homebrew formula update
+          PKG_PATH=$(find dist -type f -name "santa-sleigh-${VERSION}.pkg" | head -n1)
+          ./packaging/homebrew/update_formula.sh "$VERSION" "" "$PKG_PATH"
+      - name: Commit Homebrew updates
         run: |
           VERSION=${GITHUB_REF_NAME}
-          if ! git diff --quiet Formula/santa-sleigh.rb; then
+          if git status --short Formula/santa-sleigh.rb Casks/santa-sleigh.rb | grep -q .; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add Formula/santa-sleigh.rb
-            git commit -m "Update Homebrew formula for ${VERSION}"
+            git add Formula/santa-sleigh.rb Casks/santa-sleigh.rb
+            git commit -m "Update Homebrew metadata for ${VERSION}"
             git push origin HEAD:main
           fi
       - name: Publish GitHub Release
