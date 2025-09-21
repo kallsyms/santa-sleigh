@@ -5,8 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=santa-sleigh
-Group=santa-sleigh
 ExecStart=/usr/local/bin/santa-sleigh -config /etc/santa-sleigh/config.toml
 EnvironmentFile=-/etc/default/santa-sleigh
 WorkingDirectory=/var/lib/santa-sleigh
